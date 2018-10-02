@@ -183,7 +183,7 @@ get_ipython().magic('timeit one_run()')
 # 
 #     conda install cython
 
-# In[5]:
+# In[8]:
 
 # For jupyter notebook magic:
 get_ipython().magic('load_ext Cython')
@@ -236,18 +236,19 @@ get_ipython().magic('timeit local_random()')
 # # Optimized
 # Here's a somewhat optimized cythonized version of our KMC algorithm
 
-# In[12]:
+# In[24]:
 
-get_ipython().run_cell_magic('cython', '--annotate', 'import random\nimport numpy as np\ncimport numpy as np\nfrom libc.stdlib cimport rand, RAND_MAX\nfrom libc.math cimport log\n\nimport cython\n@cython.cdivision(True)\ncpdef tuple one_run_optimized():\n    """\n    This runs a single Kinetic Monte Carlo simulation\n    """\n    cdef double k1, k2, k3, k4, rabbit_birth, rabbit_death, fox_birth, fox_death\n    cdef double end_time, time, sum_rates, \n    cdef double wait_time, choice\n    cdef int rabbit, fox\n    cdef list times, rabbits, foxes\n    cdef bint foxes_died, everything_died\n    cdef np.ndarray[np.float64_t, ndim=1] times_array, \n    cdef np.ndarray[np.int_t, ndim=1] rabbits_array, foxes_array\n\n    k1 = 0.015\n    k2 = 0.00004\n    k3 = 0.0004\n    k4 = 0.04\n    end_time = 600\n    time = 0\n    rabbit = 400\n    fox = 200\n    # we don\'t know how long these will be so start as lists and convert to arrays later\n    times = []\n    rabbits = []\n    foxes = []\n    foxes_died = False\n    rabbits_died = False\n\n    while time < end_time:\n        times.append(time)\n        rabbits.append(rabbit)\n        foxes.append(fox)\n                    \n        rabbit_birth = k1 * rabbit \n        rabbit_death = k2 * rabbit * fox\n        fox_birth = k3 * rabbit * fox\n        fox_death = k4 * fox\n        sum_rates = rabbit_birth + rabbit_death + fox_birth + fox_death\n\n        #wait_time = random.expovariate( sum_rates )\n        wait_time = -log((RAND_MAX-rand())/1.0/RAND_MAX) / sum_rates \n        time += wait_time\n        choice = sum_rates * rand() / RAND_MAX\n        # Imagine we threw a dart at a number line with span (0, sum_rates) and it hit at "choice"\n        # Foxes change more often than rabbits, so we\'ll be faster if we check them first!\n        if choice < fox_birth:\n            fox += 1 # fox born\n            continue\n        choice -= fox_birth\n        if choice < fox_death:\n            fox -= 1 # fox died\n            if fox == 0:\n                foxes_died = True\n                break # For this assignment I don\'t care what happens to rabbits!\n            continue\n        choice -= fox_death\n        if choice < rabbit_birth:\n            rabbit += 1 # rabbit born\n            continue\n        rabbit -= 1 # rabbit died\n        if rabbit == 0:\n            rabbits_died = True\n    \n    times_array = np.array(times)\n    rabbits_array = np.array(rabbits)\n    foxes_array = np.array(foxes)\n    \n    return times_array, rabbits_array, foxes_array, foxes_died, rabbits_died')
+get_ipython().run_cell_magic('cython', '--annotate', 'import random\nimport numpy as np\ncimport numpy as np\nfrom libc.stdlib cimport rand, RAND_MAX # Use random number generator from C standard library\nfrom libc.math cimport log # Use the \'log\' function from the C math library\n\nimport cython\n@cython.cdivision(True)\ncpdef tuple one_run_optimized():\n    """\n    This runs a single Kinetic Monte Carlo simulation\n    """\n    # These type declarations allow Cython to create optimized C code\n    # that doesn\'t have to do the "duck typing" of Python, as it already \n    # knows what type these variables are and how to operate on them.\n    cdef double k1, k2, k3, k4, rabbit_birth, rabbit_death, fox_birth, fox_death\n    cdef double end_time, time, sum_rates, \n    cdef double wait_time, choice\n    cdef int rabbit, fox\n    cdef list times, rabbits, foxes\n    cdef bint foxes_died, everything_died\n    cdef np.ndarray[np.float64_t, ndim=1] times_array, \n    cdef np.ndarray[np.int_t, ndim=1] rabbits_array, foxes_array\n\n    k1 = 0.015\n    k2 = 0.00004\n    k3 = 0.0004\n    k4 = 0.04\n    end_time = 600\n    time = 0\n    rabbit = 400\n    fox = 200\n    # we don\'t know how long these will be so start as lists and convert to arrays later\n    times = []\n    rabbits = []\n    foxes = []\n    foxes_died = False\n    rabbits_died = False\n    \n    # give these local names to avoid repeated method lookups inside the loop\n    timesappend = times.append\n    rabbitsappend = rabbits.append\n    foxesappend = foxes.append \n\n    while time < end_time:\n        timesappend(time)\n        rabbitsappend(rabbit)\n        foxesappend(fox)\n                    \n        rabbit_birth = k1 * rabbit \n        rabbit_death = k2 * rabbit * fox\n        fox_birth = k3 * rabbit * fox\n        fox_death = k4 * fox\n        sum_rates = rabbit_birth + rabbit_death + fox_birth + fox_death\n\n        #wait_time = random.expovariate( sum_rates )\n        wait_time = -log((RAND_MAX-rand())/1.0/RAND_MAX) / sum_rates \n        time += wait_time\n        choice = sum_rates * rand() / RAND_MAX\n        # Imagine we threw a dart at a number line with span (0, sum_rates) and it hit at "choice"\n        # Foxes change more often than rabbits, so we\'ll be faster if we check them first!\n        if choice < fox_birth:\n            fox += 1 # fox born\n            continue\n        choice -= fox_birth\n        if choice < fox_death:\n            fox -= 1 # fox died\n            if fox == 0:\n                foxes_died = True\n                break # For this assignment I don\'t care what happens to rabbits!\n            continue\n        choice -= fox_death\n        if choice < rabbit_birth:\n            rabbit += 1 # rabbit born\n            continue\n        rabbit -= 1 # rabbit died\n        if rabbit == 0:\n            rabbits_died = True\n    \n    times_array = np.array(times)\n    rabbits_array = np.array(rabbits)\n    foxes_array = np.array(foxes)\n    \n    return times_array, rabbits_array, foxes_array, foxes_died, rabbits_died')
 
 
-# In[13]:
+# In[25]:
 
 one_run_optimized()
 
 
-# In[14]:
+# In[28]:
 
+random.seed(1)
 get_ipython().magic('timeit one_run_optimized()')
 
 
@@ -261,15 +262,12 @@ get_ipython().run_cell_magic('timeit', '-n1 -r1', 'full_analysis(runs=1000, func
 # 
 # You should never spend time optimizing (like I just did) before you profile. You may spend time optimizing the wrong thing. 
 # 
-# Python has built in profiling tools, but to do it in a notebook with a little magic we will use a new module called line_profiler:
+# Python has built in profiling tools, but to do it in a notebook with a little magic we will use a new module called line_profiler. Install by typeing this in an Anaconda Console (windows) or Terminal (mac or linux)
 # 
 #     conda install line_profiler
 #     
-# However, the current one in anaconda is broken. Googling the error message will lead you to this pull request https://github.com/rkern/line_profiler/pull/65 in which someone has helpfully provided a patch. Until the fix makes it into the official version, you'll have to replace your line_profiler.py (probably somewhere like /Users/rwest/anaconda/envs/py3/lib/python3.5/site-packages/line_profiler.py) with this one
-# https://raw.githubusercontent.com/caethan/line_profiler/482772a8a43ac1f2bfcbf66ac5e015d0b146f5e6/line_profiler.py
-# 
 
-# In[16]:
+# In[29]:
 
 get_ipython().magic('load_ext line_profiler')
 
@@ -277,25 +275,35 @@ get_ipython().magic('load_ext line_profiler')
 # In[ ]:
 
 def run_everything():
-    # put your code here
+    "One monolithic function that does everything in one go"
+    # Paste all your old code here, so you can run it in a function.
+    # Don't forget to indent it!
 
 
 # In[ ]:
 
+# now profile run_everything whiler running run_everything():
 get_ipython().magic('lprun -f run_everything run_everything()')
+
+
+# In[30]:
+
+# For my example, I want to profile 'one_run' while running 'full_analysis(runs=100, function=one_run)'
+get_ipython().magic('lprun -f one_run full_analysis(runs=100, function=one_run)')
 
 
 # In[17]:
 
-get_ipython().magic('lprun -f full_analysis full_analysis(runs=10000, function=one_run_optimized)')
+# Or to profile full_analysis while running full_analysis(runs=1000, function=one_run_optimized)
+get_ipython().magic('lprun -f full_analysis full_analysis(runs=1000, function=one_run_optimized)')
 
 
-# To profile within the cythonized code, see here: http://nbviewer.jupyter.org/gist/tillahoffmann/296501acea231cbdf5e7
+# To profile lines within the cythonized code, see here: http://nbviewer.jupyter.org/gist/tillahoffmann/296501acea231cbdf5e7
 
 # # Faster analysis
-# A lot of time is spent collecting the cumulative convergenge plots. Once we know how many iterations we want to do to be confindent we've converged, all we need is the final number, and we can avoid that wasted time. Here is a faster analysis routine
+# The profiling reveals that a lot of time is spent collecting the cumulative convergenge plots. Once we know how many iterations we want to do to be confindent we've converged, all we need is the final number, and we can avoid that wasted time. Here is a faster analysis routine
 
-# In[18]:
+# In[9]:
 
 def fast_analysis(runs=1000, function=one_run):
     """
@@ -363,9 +371,9 @@ def fast_analysis(runs=1000, function=one_run):
     plt.show()
 
 
-# In[19]:
+# In[31]:
 
-fast_analysis(runs=1000, function=one_run_optimized)
+get_ipython().run_cell_magic('timeit', '-n1 -r1', 'fast_analysis(runs=1000, function=one_run_optimized)')
 
 
 # In[20]:
